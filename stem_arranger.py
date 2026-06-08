@@ -115,7 +115,32 @@ def render_section(stems, section, sr, bpm,
         )
         e = available
     slices = [stems[name][s:e].astype(np.float64) for name in section["stems"]]
-    return np.sum(slices, axis=0)
+    out = np.sum(slices, axis=0)
+
+    gain_db = section.get("gain_db", 0.0)
+    if gain_db:
+        out = out * 10 ** (gain_db / 20.0)
+
+    out = apply_fades(out, sr,
+                      section.get("fade_in_ms", 0.0),
+                      section.get("fade_out_ms", 0.0))
+    return out
+
+
+def apply_fades(audio, sr, fade_in_ms=0.0, fade_out_ms=0.0):
+    """Apply linear fade-in/out envelopes (in ms) to the edges of a section.
+
+    Fades are clamped to the section length and applied in place on a copy.
+    """
+    audio = audio.copy()
+    n = audio.shape[0]
+    fi = min(round(fade_in_ms / 1000.0 * sr), n)
+    fo = min(round(fade_out_ms / 1000.0 * sr), n)
+    if fi > 0:
+        audio[:fi] *= np.linspace(0.0, 1.0, fi)[:, None]
+    if fo > 0:
+        audio[-fo:] *= np.linspace(1.0, 0.0, fo)[:, None]
+    return audio
 
 
 def equal_power_fades(n):
@@ -137,10 +162,17 @@ def assemble(variation, stems, sr, bpm, crossfade_ms=5.0,
     """
     sections = [render_section(stems, sec, sr, bpm, beats_per_bar)
                 for sec in variation]
-    x = round(crossfade_ms / 1000.0 * sr)
+    # Drop sections that clamped to nothing (bar range entirely past the stems).
+    sections = [s for s in sections if s.shape[0] > 0]
+    if not sections:
+        raise ValueError("variation produced no audio (all sections are "
+                         "outside the stems' length)")
 
+    xfade = round(crossfade_ms / 1000.0 * sr)
     result = sections[0]
     for nxt in sections[1:]:
+        # Never overlap more than the shorter neighbour can supply.
+        x = min(xfade, result.shape[0], nxt.shape[0])
         if x > 0:
             fo, fi = equal_power_fades(x)
             fo = fo[:, None]
@@ -160,11 +192,19 @@ def write_wav(path, audio, sr, subtype="PCM_24"):
     sf.write(path, audio, sr, subtype=subtype)
 
 
+def write_preview(path, audio, sr):
+    """Write a small, lossy MP3 preview for fast A/B listening."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    sf.write(path, audio, sr, format="MP3")
+
+
 def render_variation(folder, bpm, variation, out_path, crossfade_ms=5.0,
                      ceiling_db=DEFAULT_CEILING_DB, subtype="PCM_24",
-                     beats_per_bar=DEFAULT_BEATS_PER_BAR):
+                     preview=False, beats_per_bar=DEFAULT_BEATS_PER_BAR):
     """Load stems, assemble one variation, and write it to out_path.
 
+    When ``preview`` is set, also writes a lossy MP3 next to the WAV.
     Returns the applied peak-protection gain in dB (0.0 if none needed).
     """
     stems, sr = load_stems(folder)
@@ -173,6 +213,8 @@ def render_variation(folder, bpm, variation, out_path, crossfade_ms=5.0,
                                  ceiling_db=ceiling_db,
                                  beats_per_bar=beats_per_bar)
     write_wav(out_path, audio, sr, subtype=subtype)
+    if preview:
+        write_preview(Path(out_path).with_suffix(".mp3"), audio, sr)
     return applied_db
 
 
@@ -201,6 +243,8 @@ def main(argv=None, arrangements=None):
                              "(default: -1 dBFS)")
     parser.add_argument("--subtype", default="PCM_24",
                         help="Output WAV subtype (default: PCM_24)")
+    parser.add_argument("--preview", action="store_true",
+                        help="Also write a lossy .mp3 preview next to each WAV")
     parser.add_argument("--list", action="store_true",
                         help="List the stem keys detected in --folder and exit")
     args = parser.parse_args(argv)
@@ -230,10 +274,12 @@ def main(argv=None, arrangements=None):
         applied_db = render_variation(
             args.folder, args.bpm, arrangements[name], out_path,
             crossfade_ms=args.crossfade_ms, ceiling_db=args.ceiling_db,
-            subtype=args.subtype)
+            subtype=args.subtype, preview=args.preview)
         note = (f" (−{abs(applied_db):.2f} dB applied for headroom)"
                 if applied_db < 0 else "")
         print(f"Wrote {out_path}{note}")
+        if args.preview:
+            print(f"  preview {out_path.with_suffix('.mp3')}")
         written.append(out_path)
     return written
 

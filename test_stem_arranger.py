@@ -105,6 +105,40 @@ def test_render_section_unknown_stem_names_the_culprit():
         sa.render_section(stems, section, 48000, 120)
 
 
+# --- per-section gain & fades -------------------------------------------
+
+def test_render_section_applies_gain_db():
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    stems = {"a": _stem(0.4, spb)}
+    section = {"source_bars": (1, 1), "stems": ["a"], "gain_db": -6.0}
+    out = sa.render_section(stems, section, sr, bpm)
+    assert np.allclose(out, 0.4 * 10 ** (-6.0 / 20.0))
+
+
+def test_render_section_fade_in_ramps_from_silence():
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    stems = {"a": _stem(0.5, spb * 2)}
+    n = round(10 / 1000 * sr)  # 480-sample fade
+    section = {"source_bars": (1, 2), "stems": ["a"], "fade_in_ms": 10.0}
+    out = sa.render_section(stems, section, sr, bpm)
+    assert np.isclose(out[0, 0], 0.0)            # starts silent
+    assert np.isclose(out[n - 1, 0], 0.5)        # full by end of the fade
+    assert np.isclose(out[n // 2, 0], 0.25, atol=1e-3)  # ~halfway up midway
+    assert np.allclose(out[n:], 0.5)             # unaffected after the fade
+
+
+def test_render_section_fade_out_ramps_to_silence():
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    stems = {"a": _stem(0.5, spb * 2)}
+    section = {"source_bars": (1, 2), "stems": ["a"], "fade_out_ms": 10.0}
+    out = sa.render_section(stems, section, sr, bpm)
+    assert np.isclose(out[-1, 0], 0.0)           # ends silent
+    assert np.allclose(out[0], 0.5)              # untouched at the start
+
+
 # --- equal-power crossfade ----------------------------------------------
 
 def test_equal_power_fades_preserve_power():
@@ -144,6 +178,31 @@ def test_assemble_crossfade_overlaps_sections():
     audio, _ = sa.assemble(variation, stems, sr, bpm, crossfade_ms=1.0)
     # Two 1-bar sections overlapped by the crossfade length.
     assert audio.shape == (2 * spb - xfade_samples, 2)
+
+
+def test_assemble_drops_fully_out_of_range_sections(tmp_path):
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    stems = {"a": _stem(0.2, spb * 2)}  # only 2 bars exist
+    variation = [
+        {"source_bars": (1, 2), "stems": ["a"]},
+        {"source_bars": (5, 6), "stems": ["a"]},  # entirely past the end -> empty
+    ]
+    # The clamp warns; assemble must not crash on the zero-length section,
+    # and the surviving audio is just the valid section.
+    with pytest.warns(UserWarning):
+        audio, _ = sa.assemble(variation, stems, sr, bpm, crossfade_ms=5.0)
+    assert audio.shape == (2 * spb, 2)
+
+
+def test_assemble_all_sections_empty_raises_clearly(tmp_path):
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    stems = {"a": _stem(0.2, spb * 2)}
+    variation = [{"source_bars": (9, 16), "stems": ["a"]}]  # all past the end
+    with pytest.warns(UserWarning):
+        with pytest.raises(ValueError, match="no audio"):
+            sa.assemble(variation, stems, sr, bpm, crossfade_ms=0.0)
 
 
 # --- loading stems from disk --------------------------------------------
@@ -203,6 +262,24 @@ def test_write_wav_roundtrips_and_creates_parent(tmp_path):
     assert np.allclose(back, audio)
 
 
+# --- compressed preview --------------------------------------------------
+
+def test_write_preview_is_compressed_and_readable(tmp_path):
+    sr = 48000
+    tone = 0.3 * np.sin(2 * np.pi * 440 * np.arange(sr) / sr)  # 1s
+    audio = np.column_stack([tone, tone])
+    wav = tmp_path / "a.wav"
+    prev = tmp_path / "a.mp3"
+    sa.write_wav(wav, audio, sr, subtype="PCM_24")
+    sa.write_preview(prev, audio, sr)
+    assert prev.exists()
+    back, got_sr = sf.read(prev, dtype="float64", always_2d=True)
+    assert got_sr == sr
+    assert back.shape[1] == 2
+    assert abs(back.shape[0] - audio.shape[0]) < sr * 0.1     # length within 100ms
+    assert prev.stat().st_size < wav.stat().st_size           # actually compressed
+
+
 # --- full pipeline integration ------------------------------------------
 
 def test_render_variation_end_to_end(tmp_path):
@@ -245,6 +322,35 @@ def test_main_renders_selected_variations(tmp_path):
     assert written == [out_dir / "mini.wav"]
     back, _ = sf.read(out_dir / "mini.wav", dtype="float64", always_2d=True)
     assert back.shape == (4 * spb, 2)
+
+
+def test_main_preview_writes_compressed_alongside_wav(tmp_path):
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    _write_wav(tmp_path / "Synth.wav", 0.2, spb * 4, sr)
+    arrangements = {"mini": [{"source_bars": (1, 2), "stems": ["synth"]}]}
+    out_dir = tmp_path / "out"
+    sa.main(
+        ["--folder", str(tmp_path), "--bpm", "120", "--out", str(out_dir),
+         "--crossfade-ms", "0", "--preview"],
+        arrangements=arrangements,
+    )
+    assert (out_dir / "mini.wav").exists()
+    assert (out_dir / "mini.mp3").exists()
+
+
+def test_main_preview_reports_mp3_in_output(tmp_path, capsys):
+    sr, bpm = 48000, 120
+    spb = sa.samples_per_bar(sr, bpm)
+    _write_wav(tmp_path / "Synth.wav", 0.2, spb * 4, sr)
+    arrangements = {"mini": [{"source_bars": (1, 2), "stems": ["synth"]}]}
+    sa.main(
+        ["--folder", str(tmp_path), "--bpm", "120", "--out", str(tmp_path / "o"),
+         "--crossfade-ms", "0", "--preview"],
+        arrangements=arrangements,
+    )
+    out = capsys.readouterr().out
+    assert "mini.mp3" in out  # preview path is echoed, not silent
 
 
 def test_main_list_reports_detected_stems(tmp_path, capsys):

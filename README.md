@@ -60,6 +60,16 @@ Because sections reference the original by bar, you can **reorder and reuse**
 real musical content — lift the breakdown from where it actually lives, repeat
 the chorus, top-and-tail with a DJ intro/outro.
 
+Each section also takes optional automation keys:
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `source_bars` | (required) | `(start, end)` 1-indexed, inclusive bar range |
+| `stems` | (required) | stem keys that play; omitted stems are silent |
+| `gain_db` | `0` | section level offset in dB |
+| `fade_in_ms` | `0` | linear fade-in at the section start |
+| `fade_out_ms` | `0` | linear fade-out at the section end |
+
 ## What it guarantees
 
 - **Sample-accurate cuts** — `samples_per_bar = round(sr · 60/bpm · 4)`; no
@@ -82,6 +92,7 @@ the chorus, top-and-tail with a DJ intro/outro.
 | `--crossfade-ms` | `5.0` | Section-join crossfade; `0` for hard cuts |
 | `--ceiling-db` | `-1.0` | Peak ceiling for clip protection |
 | `--subtype` | `PCM_24` | Output WAV bit depth (soundfile subtype) |
+| `--preview` | — | Also write a lossy `.mp3` next to each WAV |
 | `--list` | — | Print detected stem keys and exit |
 
 ## Known limits
