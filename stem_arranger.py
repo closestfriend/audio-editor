@@ -7,6 +7,7 @@ milliseconds) so boundaries land exactly on the grid at any BPM.
 """
 
 import argparse
+import re
 import warnings
 from pathlib import Path
 
@@ -17,30 +18,53 @@ DEFAULT_BEATS_PER_BAR = 4
 DEFAULT_CEILING_DB = -1.0
 
 
+def stem_key(filename_stem):
+    """Normalize a filename (no extension) into a stem key.
+
+    Lowercased; every run of non-alphanumeric characters becomes a single
+    underscore; leading/trailing underscores stripped. So "Lead Synth" ->
+    "lead_synth", "Vocals (Wet)" -> "vocals_wet", "FX-01" -> "fx_01".
+    """
+    key = re.sub(r"[^a-z0-9]+", "_", filename_stem.lower()).strip("_")
+    return key or "_"
+
+
 def load_stems(folder):
     """Load every .wav in a folder as a float64 stem.
 
-    Returns (stems, sr) where stems maps a lowercased filename (no extension)
-    to a 2D array of shape (frames, channels). Stems must share a sample rate
-    (mismatch is an error); differing lengths are padded up to the longest
-    with silence so bar slicing always stays in range.
+    Returns (stems, sr) where stems maps a normalized key (see stem_key) to a
+    2D array of shape (frames, channels). Two files that normalize to the same
+    key, or stems disagreeing on sample rate or channel count, are errors;
+    differing lengths are padded up to the longest with silence so bar slicing
+    always stays in range.
     """
     folder = Path(folder)
     wavs = sorted(p for p in folder.iterdir() if p.suffix.lower() == ".wav")
     if not wavs:
         raise FileNotFoundError(f"No .wav stems found in {folder}")
 
-    stems, rates = {}, {}
+    stems, rates, sources = {}, {}, {}
     for path in wavs:
+        key = stem_key(path.stem)
+        if key in sources:
+            raise ValueError(
+                f"Stem name collision: '{sources[key]}' and '{path.name}' "
+                f"both normalize to '{key}'. Rename one of them.")
         data, sr = sf.read(path, dtype="float64", always_2d=True)
-        stems[path.stem.lower()] = data
-        rates[path.stem.lower()] = sr
+        stems[key], rates[key], sources[key] = data, sr, path.name
 
     distinct = set(rates.values())
     if len(distinct) > 1:
         detail = ", ".join(f"{k}={v}Hz" for k, v in rates.items())
         raise ValueError(f"Stems disagree on sample rate: {detail}")
     sr = distinct.pop()
+
+    channels = {k: v.shape[1] for k, v in stems.items()}
+    if len(set(channels.values())) > 1:
+        detail = ", ".join(f"{k}={v}ch" for k, v in channels.items())
+        raise ValueError(
+            f"Stems disagree on channel count: {detail}. All stems must be "
+            f"mono, or all stereo.")
 
     lengths = {k: v.shape[0] for k, v in stems.items()}
     longest = max(lengths.values())

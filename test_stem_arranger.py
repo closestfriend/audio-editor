@@ -223,6 +223,29 @@ def test_load_stems_keys_are_lowercased_filenames(tmp_path):
     assert stems["drums"].dtype == np.float64
 
 
+def test_load_stems_slugifies_messy_filenames(tmp_path):
+    _write_wav(tmp_path / "Lead Synth.wav", 0.1, 1000, 48000)
+    _write_wav(tmp_path / "Vocals (Wet).wav", 0.2, 1000, 48000)
+    _write_wav(tmp_path / "FX-01.wav", 0.3, 1000, 48000)
+    stems, _ = sa.load_stems(tmp_path)
+    assert set(stems) == {"lead_synth", "vocals_wet", "fx_01"}
+
+
+def test_load_stems_raises_on_key_collision(tmp_path):
+    # Two distinct files that normalize to the same key.
+    _write_wav(tmp_path / "Lead Synth.wav", 0.1, 1000, 48000)
+    _write_wav(tmp_path / "Lead-Synth.wav", 0.9, 1000, 48000)
+    with pytest.raises(ValueError, match="collision"):
+        sa.load_stems(tmp_path)
+
+
+def test_load_stems_raises_on_channel_mismatch(tmp_path):
+    _write_wav(tmp_path / "Mono.wav", 0.2, 1000, 48000, channels=1)
+    _write_wav(tmp_path / "Stereo.wav", 0.3, 1000, 48000, channels=2)
+    with pytest.raises(ValueError, match="channel"):
+        sa.load_stems(tmp_path)
+
+
 def test_load_stems_rejects_sample_rate_mismatch(tmp_path):
     _write_wav(tmp_path / "Drums.wav", 0.1, 1000, 48000)
     _write_wav(tmp_path / "Bass.wav", 0.2, 1000, 44100)

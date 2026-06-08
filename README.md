@@ -95,10 +95,20 @@ Each section also takes optional automation keys:
 | `--preview` | — | Also write a lossy `.mp3` next to each WAV |
 | `--list` | — | Print detected stem keys and exit |
 
+## Stem naming
+
+Stem keys are a normalized slug of the filename — lowercased, runs of
+non-alphanumeric characters collapsed to single underscores, edges trimmed
+(`Lead Synth.wav` → `lead_synth`, `FX-01.wav` → `fx_01`). The names are
+arbitrary labels (no required vocabulary); they just have to match the keys in
+`arrangements.py`. Run `--list` and paste the exact keys. Two files that
+normalize to the same key are a hard error.
+
 ## Known limits
 
-- Assumes all stems share channel count (all mono or all stereo) and start at
-  bar 1. Trimmed/offset clips aren't auto-aligned.
+- All stems must share sample rate and channel count (all mono or all stereo) —
+  mismatches raise clear errors — and start at bar 1. Trimmed/offset clips
+  aren't auto-aligned.
 
 ## Tests
 

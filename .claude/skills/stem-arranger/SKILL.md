@@ -33,7 +33,7 @@ EXTENDED = [
 | `fade_in_ms` | no | linear fade-in at the section start (default 0) |
 | `fade_out_ms` | no | linear fade-out at the section end (default 0) |
 
-**Stem keys are the lowercased filename without extension.** `Drums.wav` → `drums`, `Vocals.wav` → `vocals`. Never guess — discover them with `--list`.
+**Stem keys are a normalized slug of the filename:** lowercased, every run of non-alphanumeric characters becomes one underscore, edges trimmed. `Drums.wav` → `drums`, `Lead Synth.wav` → `lead_synth`, `Vocals (Wet).wav` → `vocals_wet`, `FX-01.wav` → `fx_01`. Two files that normalize to the same key are a hard error (rename one). Never guess keys — discover them with `--list`.
 
 `gain_db` is a *per-section* offset. Independently, the finished mix is scaled once so its peak hits the ceiling, and stdout reports that global cut (e.g. `−4.16 dB applied for headroom`) — so the printed number is the bus-level adjustment, not your section gain.
 
@@ -66,9 +66,9 @@ EXTENDED = [
 - **Guessing stem names** instead of running `--list` → `KeyError`. The error names the missing stem and the available keys.
 - **Forgetting `--bpm`** → cut timing is wrong; it's required (the tool errors if missing).
 - **Leaving placeholder `source_bars`** → variation pulls the wrong parts. Always set them to the actual song structure; bars past the end clamp with a warning.
-- **Mismatched stems** (different length / sample rate / channel count) → SR mismatch errors; length mismatch pads with a warning. All stems must be all-mono or all-stereo.
+- **Mismatched stems** → sample-rate, channel-count, and name-collision mismatches all raise clear errors naming the offenders; a length mismatch pads to the longest with a warning. All stems must be all-mono or all-stereo.
 - **Editing `stem_arranger.py` for an arrangement change** — arrangements live in `arrangements.py`.
 
 ## Verifying changes
 
-`.venv/bin/python -m pytest -q` (27 tests cover bar math, clip protection, assembly, fades, loading, CLI). See `README.md` for full docs.
+`.venv/bin/python -m pytest -q` (32 tests cover bar math, clip protection, assembly, fades, loading, CLI). See `README.md` for full docs.
