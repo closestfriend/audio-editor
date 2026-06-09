@@ -95,6 +95,25 @@ Each section also takes optional automation keys:
 | `--preview` | — | Also write a lossy `.mp3` next to each WAV |
 | `--list` | — | Print detected stem keys and exit |
 
+## Finding the BPM
+
+The renderer cuts by bars, so it needs the tempo. A tapped figure is usually
+off by a BPM or two — and because bar errors compound over a track, that drifts
+by a full bar or more by the end. `detect_tempo.py` estimates it from the
+**drums stem** (clean percussion tracks far better than a full mix):
+
+```bash
+.venv/bin/pip install -r requirements-analysis.txt   # librosa (optional, heavy)
+.venv/bin/python detect_tempo.py --drums stems/drums.wav --bpm-hint 180
+```
+
+Your tapped `--bpm-hint` resolves librosa's metric ambiguity (it often locks
+onto half-time or a 3:2 cross-rhythm); the tool then snaps a near-integer-bar
+result to the exact authored tempo and reports the **grid phase** (how far the
+first downbeat sits from sample 0). Eyeball the result, then pass the confirmed
+number to `--bpm`. This stays out of the renderer, which remains exact and
+dependency-light.
+
 ## Stem naming
 
 Stem keys are a normalized slug of the filename — lowercased, runs of

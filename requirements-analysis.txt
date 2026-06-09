@@ -1,0 +1,3 @@
+# Optional: only needed for detect_tempo.py (BPM/grid analysis).
+# The core renderer (stem_arranger.py) does NOT require these.
+librosa

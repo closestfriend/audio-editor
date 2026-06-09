@@ -61,6 +61,16 @@ EXTENDED = [
 
 `--folder` (req) · `--bpm` (req unless `--list`) · `--out` (default `out`) · `--variation` (repeatable; default all) · `--crossfade-ms` (default 5; equal-power; 0 = hard cut) · `--ceiling-db` (default −1) · `--subtype` (default `PCM_24`) · `--preview` (also write MP3) · `--list`. Run with `--help` for the authoritative list.
 
+## Finding the BPM (`detect_tempo.py`)
+
+The renderer needs `--bpm`. If unknown, estimate it from the **drums stem** with the optional companion (requires `pip install -r requirements-analysis.txt`; librosa is heavy and NOT needed by the renderer):
+
+```bash
+.venv/bin/python detect_tempo.py --drums stems/drums.wav --bpm-hint 180
+```
+
+Pass a rough tapped tempo as `--bpm-hint` — it resolves librosa's metric ambiguity (half-time, or 3:2/triplet cross-rhythms). The tool snaps near-integer-bar results to the exact authored tempo and prints the **grid phase** (how far the first downbeat is from sample 0; large values mean the track has a lead-in and whole-bar cuts won't land exactly on musical downbeats). It only *reports* — you confirm the number and feed it to `--bpm`.
+
 ## Common mistakes
 
 - **Guessing stem names** instead of running `--list` → `KeyError`. The error names the missing stem and the available keys.
