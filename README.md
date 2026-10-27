@@ -1,7 +1,7 @@
 # stem-arranger
 
 Assemble arrangement variations (Extended Mix, Radio Edit, Subtractive Ambient, …)
-from a folder of time-aligned stems — **sample-accurate** and **clip-safe**.
+from a folder of time-aligned stems: **sample-accurate** and **clip-safe**.
 
 Built on `soundfile` + `numpy` (not pydub): cuts land on exact sample boundaries
 at any BPM, and the mix bus is protected against the clipping you get from
@@ -57,7 +57,7 @@ EXTENDED_MIX = [
 ```
 
 Because sections reference the original by bar, you can **reorder and reuse**
-real musical content — lift the breakdown from where it actually lives, repeat
+real musical content: lift the breakdown from where it actually lives, repeat
 the chorus, top-and-tail with a DJ intro/outro.
 
 Each section also takes optional automation keys:
@@ -72,13 +72,13 @@ Each section also takes optional automation keys:
 
 ## What it guarantees
 
-- **Sample-accurate cuts** — `samples_per_bar = round(sr · 60/bpm · 4)`; no
+- **Sample-accurate cuts**: `samples_per_bar = round(sr · 60/bpm · 4)`; no
   millisecond rounding drift (the bug that clicks at 124 BPM).
-- **Clip protection** — sections sum at unity; the finished arrangement is
+- **Clip protection**: sections sum at unity; the finished arrangement is
   scaled once so its peak sits at the ceiling (default −1 dBFS), and the applied
   gain is printed. Relative section levels are preserved.
 - **Equal-power crossfades** at section joins (default 5 ms) to kill clicks.
-- **Sanity checks on load** — errors on sample-rate mismatch; pads length
+- **Sanity checks on load**: errors on sample-rate mismatch; pads length
   mismatches to the longest stem with a warning.
 
 ## Options
@@ -92,13 +92,13 @@ Each section also takes optional automation keys:
 | `--crossfade-ms` | `5.0` | Section-join crossfade; `0` for hard cuts |
 | `--ceiling-db` | `-1.0` | Peak ceiling for clip protection |
 | `--subtype` | `PCM_24` | Output WAV bit depth (soundfile subtype) |
-| `--preview` | — | Also write a lossy `.mp3` next to each WAV |
-| `--list` | — | Print detected stem keys and exit |
+| `--preview` |: | Also write a lossy `.mp3` next to each WAV |
+| `--list` |: | Print detected stem keys and exit |
 
 ## Finding the BPM
 
 The renderer cuts by bars, so it needs the tempo. A tapped figure is usually
-off by a BPM or two — and because bar errors compound over a track, that drifts
+off by a BPM or two: and because bar errors compound over a track, that drifts
 by a full bar or more by the end. `detect_tempo.py` estimates it from the
 **drums stem** (clean percussion tracks far better than a full mix):
 
@@ -116,7 +116,7 @@ dependency-light.
 
 ## Stem naming
 
-Stem keys are a normalized slug of the filename — lowercased, runs of
+Stem keys are a normalized slug of the filename: lowercased, runs of
 non-alphanumeric characters collapsed to single underscores, edges trimmed
 (`Lead Synth.wav` → `lead_synth`, `FX-01.wav` → `fx_01`). The names are
 arbitrary labels (no required vocabulary); they just have to match the keys in
@@ -126,7 +126,7 @@ normalize to the same key are a hard error.
 ## Known limits
 
 - All stems must share sample rate and channel count (all mono or all stereo) —
-  mismatches raise clear errors — and start at bar 1. Trimmed/offset clips
+  mismatches raise clear errors: and start at bar 1. Trimmed/offset clips
   aren't auto-aligned.
 
 ## Tests
